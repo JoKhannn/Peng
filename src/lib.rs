@@ -2761,6 +2761,43 @@ pub fn log_pinhole_depth(
 
     Ok(())
 }
+
+pub struct Wind {
+    pub wind_strength_noise: PerlinNoise2D<f32>,
+    pub wind_direction_noise: PerlinNoise2D<f32>,
+    pub von_karman_constant: f32,
+    pub friction_velocity: f32,
+    pub zero_plane_displacement: f32,
+    pub surface_roughness: f32,
+}
+use perlin2d::*;
+
+///use log wind to determine wind strength coefficient based on height
+/// use
+impl Wind {
+
+    pub fn new()
+
+    pub fn update_wind_velocity(
+        position: Vector3<f32>,
+        time: f32,
+    ) -> Vector3<f32> {
+        (friction_velocity / von_karman_constant) * ((position.z - zero_plane_displacement) / surface_roughness).ln();
+
+        let perlin_obj = perlin2d::PerlinNoise2D::new(6, 1.0, 0.5, 1.0, 2.0, (std::f64::consts::TAU, std::f64::consts::TAU), 101f64, 1i32);
+
+        for i in 0..=100 {
+            let mut x = perlin_obj.get_noise(std::f64::consts::PI , i as f64);
+            while x > std::f64::consts::TAU {
+                x -= std::f64::consts::TAU;
+            }
+            println!("{}", x.abs());
+        }
+    }
+}
+
+
+
 /// turbo color map function
 /// # Arguments
 /// * `gray` - The gray value in the range [0, 255]
