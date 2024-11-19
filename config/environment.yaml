@@ -1,0 +1,8 @@
+wind:
+  wind_state: true
+  wind_num: 1
+  friction_velocity: 1.0
+  von_karman_constant: 0.40
+  zero_plane_displacement: 1
+  surface_roughness: 1
+

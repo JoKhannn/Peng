@@ -58,6 +58,12 @@ fn main() -> Result<(), SimulationError> {
         config.camera.near,
         config.camera.far,
     );
+    //config.wind.state ==
+    if( true) {
+        let mut wind = Wind::new(
+
+        )
+    }
     let mut planner_manager = PlannerManager::new(Vector3::zeros(), 0.0);
     let mut trajectory = Trajectory::new(Vector3::new(0.0, 0.0, 0.0));
     let mut previous_thrust = 0.0;
@@ -97,6 +103,7 @@ fn main() -> Result<(), SimulationError> {
     let mut i = 0;
     loop {
         let time = quad.time_step * i as f32;
+        wind.update_wind_velocity(quad.position, time);
         maze.update_obstacles(quad.time_step);
         update_planner(
             &mut planner_manager,
@@ -119,7 +126,7 @@ fn main() -> Result<(), SimulationError> {
             &desired_velocity,
             desired_yaw,
             &quad.position,
-            &quad.velocity,
+            &quad.velocity + wind.wind_vector,
             quad.time_step,
         );
         let torque = controller.compute_attitude_control(

@@ -2763,8 +2763,9 @@ pub fn log_pinhole_depth(
 }
 
 pub struct Wind {
-    pub wind_strength_noise: PerlinNoise2D<f32>,
-    pub wind_direction_noise: PerlinNoise2D<f32>,
+    pub wind_strength_noise: PerlinNoise2D,
+    pub wind_direction_noise: PerlinNoise2D,
+    pub wind_vector: Vector3<f32>,
     pub von_karman_constant: f32,
     pub friction_velocity: f32,
     pub zero_plane_displacement: f32,
@@ -2773,21 +2774,23 @@ pub struct Wind {
 use perlin2d::*;
 
 ///use log wind to determine wind strength coefficient based on height
-/// use
+///need variable wind updates crosswind, strongwind, rapid angle update
 impl Wind {
-
-    pub fn new()
+    pub fn new(&mut self) {
+        self.wind_strength_noise = PerlinNoise2D::new(6, 1.0, 0.5, 1.0, 2.0, (std::f64::consts::TAU, std::f64::consts::TAU), 101f64, 1i32);
+        self.wind_direction_noise = PerlinNoise2D::new(6, 1.0, 0.5, 1.0, 2.0, (std::f64::consts::TAU, std::f64::consts::TAU), 101f64, 1i32);
+        self.wind_vector = Vector3::new(0.0, 0.0, 0.0);
+    }
 
     pub fn update_wind_velocity(
+        &mut self,
         position: Vector3<f32>,
         time: f32,
     ) -> Vector3<f32> {
         (friction_velocity / von_karman_constant) * ((position.z - zero_plane_displacement) / surface_roughness).ln();
 
-        let perlin_obj = perlin2d::PerlinNoise2D::new(6, 1.0, 0.5, 1.0, 2.0, (std::f64::consts::TAU, std::f64::consts::TAU), 101f64, 1i32);
-
         for i in 0..=100 {
-            let mut x = perlin_obj.get_noise(std::f64::consts::PI , i as f64);
+            let mut x = self.wind_direction_noise.get_noise((position.y/position.x).atan() , i as f64);
             while x > std::f64::consts::TAU {
                 x -= std::f64::consts::TAU;
             }
