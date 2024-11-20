@@ -4,5 +4,7 @@ wind:
   friction_velocity: 1.0
   von_karman_constant: 0.40
   zero_plane_displacement: 1
+  direction_seed: 1
+  strength_seed: 1
   surface_roughness: 1
 

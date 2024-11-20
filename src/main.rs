@@ -2,22 +2,30 @@ use nalgebra::Vector3;
 use peng_quad::*;
 /// Main function for the simulation
 fn main() -> Result<(), SimulationError> {
-    let mut config_str = "config/quad.yaml";
+    let mut config_str_quad = "config/quad.yaml";
+    let mut config_str_environment = "config/environment.yaml";
+
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
         println!(
             "[\x1b[33mWARN\x1b[0m peng_quad] Usage: {} <config.yaml>.",
             args[0]
         );
-        println!("[\x1b[33mWARN\x1b[0m peng_quad] Loading default configuration: config/quad.yaml");
+        println!("[\x1b[33mWARN\x1b[0m peng_quad] Loading default configurations:");
+        println!("- config/quad.yaml");
+        println!("- config/environment.yaml");
     } else {
         println!(
             "[\x1b[32mINFO\x1b[0m peng_quad] Loading configuration: {}",
             args[1]
         );
-        config_str = &args[1];
+        config_str_quad = &args[1];
+        config_str_environment = &args[1];
     }
-    let config = config::Config::from_yaml(config_str).expect("Failed to load configuration.");
+    let config = config::Config::from_yaml(config_str_quad)
+        .expect("Failed to load quad configuration.");
+    let config_environment = config::Config::from_yaml(config_str_environment)
+        .expect("Failed to load environment configuration.");
     println!(
         "[\x1b[32mINFO\x1b[0m peng_quad]Use rerun.io: {}",
         config.use_rerun

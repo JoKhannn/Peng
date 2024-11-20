@@ -172,6 +172,7 @@ impl Quadrotor {
     /// let control_torque = Vector3::new(0.0, 0.0, 0.0);
     /// quadrotor.update_dynamics_with_controls_euler(control_thrust, &control_torque);
     /// ```
+    // add external force and torque argument
     pub fn update_dynamics_with_controls_euler(
         &mut self,
         control_thrust: f32,
@@ -180,11 +181,13 @@ impl Quadrotor {
         let gravity_force = Vector3::new(0.0, 0.0, -self.mass * self.gravity);
         let drag_force = -self.drag_coefficient * self.velocity.norm() * self.velocity;
         let thrust_world = self.orientation * Vector3::new(0.0, 0.0, control_thrust);
+        //
         self.acceleration = (thrust_world + gravity_force + drag_force) / self.mass;
         self.velocity += self.acceleration * self.time_step;
         self.position += self.velocity * self.time_step;
         let inertia_angular_velocity = self.inertia_matrix * self.angular_velocity;
         let gyroscopic_torque = self.angular_velocity.cross(&inertia_angular_velocity);
+        //
         let angular_acceleration = self.inertia_matrix_inv * (control_torque - gyroscopic_torque);
         self.angular_velocity += angular_acceleration * self.time_step;
         self.orientation *=
@@ -2771,6 +2774,7 @@ pub struct Wind {
     pub zero_plane_displacement: f32,
     pub surface_roughness: f32,
 }
+//perlin2d
 use perlin2d::*;
 
 ///use log wind to determine wind strength coefficient based on height
@@ -2789,12 +2793,8 @@ impl Wind {
     ) -> Vector3<f32> {
         (friction_velocity / von_karman_constant) * ((position.z - zero_plane_displacement) / surface_roughness).ln();
 
-        for i in 0..=100 {
-            let mut x = self.wind_direction_noise.get_noise((position.y/position.x).atan() , i as f64);
-            while x > std::f64::consts::TAU {
-                x -= std::f64::consts::TAU;
-            }
-            println!("{}", x.abs());
+        let mut x = self.wind_direction_noise.get_noise((position.y/position.x).atan() , time as f64);
+
         }
     }
 }
