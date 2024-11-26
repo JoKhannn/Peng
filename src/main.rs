@@ -2,19 +2,26 @@ use nalgebra::Vector3;
 use peng_quad::*;
 /// Main function for the simulation
 fn main() -> Result<(), SimulationError> {
-    env_logger::builder()
-        .parse_env(env_logger::Env::default().default_filter_or("info"))
-        .init();
     let mut config_str = "config/quad.yaml";
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
-        log::warn!("Usage: {} <config.yaml>.", args[0]);
-        log::warn!("Loading default configuration: config/quad.yaml");
+        println!(
+            "[\x1b[33mWARN\x1b[0m peng_quad] Usage: {} <config.yaml>.",
+            args[0]
+        );
+        println!("[\x1b[33mWARN\x1b[0m peng_quad] Loading default configuration: config/quad.yaml");
     } else {
-        log::info!("Loading configuration: {}", args[1]);
+        println!(
+            "[\x1b[32mINFO\x1b[0m peng_quad] Loading configuration: {}",
+            args[1]
+        );
         config_str = &args[1];
     }
-    let config = config::Config::from_yaml(config_str).expect("Failed to load configuration");
+    let config = config::Config::from_yaml(config_str).expect("Failed to load configuration.");
+    println!(
+        "[\x1b[32mINFO\x1b[0m peng_quad]Use rerun.io: {}",
+        config.use_rerun
+    );
     let mut quad = Quadrotor::new(
         1.0 / config.simulation.simulation_frequency as f32,
         config.quadrotor.mass,
@@ -45,15 +52,20 @@ fn main() -> Result<(), SimulationError> {
         config.maze.obstacles_velocity_bounds,
         config.maze.obstacles_radius_bounds,
     );
-    let camera = Camera::new(
+    let mut camera = Camera::new(
         config.camera.resolution,
-        config.camera.fov.to_radians(),
+        config.camera.fov_vertical.to_radians(),
         config.camera.near,
         config.camera.far,
     );
+    if let Some(thread_count) = config.max_render_threads {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(thread_count)
+            .build_global()
+            .unwrap();
+    }
     let mut planner_manager = PlannerManager::new(Vector3::zeros(), 0.0);
     let mut trajectory = Trajectory::new(Vector3::new(0.0, 0.0, 0.0));
-    let mut depth_buffer: Vec<f32> = vec![0.0; camera.resolution.0 * camera.resolution.1];
     let mut previous_thrust = 0.0;
     let mut previous_torque = Vector3::zeros();
     let planner_config: Vec<PlannerStepConfig> = config
@@ -65,14 +77,23 @@ fn main() -> Result<(), SimulationError> {
             params: step.params.clone(),
         })
         .collect();
-    log::info!("Use rerun.io: {}", config.use_rerun);
     let rec = if config.use_rerun {
-        rerun::spawn(&rerun::SpawnOptions::default())?;
-        Some(rerun::RecordingStreamBuilder::new("Peng").connect()?)
+        let _rec = rerun::RecordingStreamBuilder::new("Peng").spawn()?;
+        rerun::Logger::new(_rec.clone())
+            .with_path_prefix("logs")
+            .with_filter(rerun::default_log_filter())
+            .init()
+            .unwrap();
+        Some(_rec)
     } else {
+        env_logger::builder()
+            .parse_env(env_logger::Env::default().default_filter_or("info"))
+            .init();
         None
     };
+    log::info!("Use rerun.io: {}", config.use_rerun);
     if let Some(rec) = &rec {
+        rec.log_file_from_path(config.rerun_blueprint, None, false)?;
         rec.set_time_seconds("timestamp", 0);
         log_mesh(rec, config.mesh.division, config.mesh.spacing)?;
         log_maze_tube(rec, &maze)?;
@@ -128,14 +149,13 @@ fn main() -> Result<(), SimulationError> {
         }
         imu.update(quad.time_step)?;
         let (true_accel, true_gyro) = quad.read_imu()?;
-        let (_measured_accel, _measured_gyro) = imu.read(true_accel, true_gyro)?;
+        let (measured_accel, measured_gyro) = imu.read(true_accel, true_gyro)?;
         if i % (config.simulation.simulation_frequency / config.simulation.log_frequency) == 0 {
             if config.render_depth {
                 camera.render_depth(
                     &quad.position,
                     &quad.orientation,
                     &maze,
-                    &mut depth_buffer,
                     config.use_multithreading_depth_rendering,
                 )?;
             }
@@ -149,17 +169,17 @@ fn main() -> Result<(), SimulationError> {
                     &quad,
                     &desired_position,
                     &desired_velocity,
-                    &_measured_accel,
-                    &_measured_gyro,
+                    &measured_accel,
+                    &measured_gyro,
                 )?;
                 if config.render_depth {
-                    log_depth_image(
+                    log_depth_image(rec, &camera, config.use_multithreading_depth_rendering)?;
+                    log_pinhole_depth(
                         rec,
-                        &depth_buffer,
-                        camera.resolution.0,
-                        camera.resolution.1,
-                        camera.near,
-                        camera.far,
+                        &camera,
+                        quad.position,
+                        quad.orientation,
+                        config.camera.rotation_transform,
                     )?;
                     pinhole_depth(
                         rec,
@@ -181,5 +201,6 @@ fn main() -> Result<(), SimulationError> {
             break;
         }
     }
+    log::logger().flush();
     Ok(())
 }
