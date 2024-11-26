@@ -177,18 +177,18 @@ impl Quadrotor {
         &mut self,
         control_thrust: f32,
         control_torque: &Vector3<f32>,
+        external_force: Vector3<f32>,
+        external_torque: Vector3<f32>,
     ) {
         let gravity_force = Vector3::new(0.0, 0.0, -self.mass * self.gravity);
         let drag_force = -self.drag_coefficient * self.velocity.norm() * self.velocity;
         let thrust_world = self.orientation * Vector3::new(0.0, 0.0, control_thrust);
-        //
-        self.acceleration = (thrust_world + gravity_force + drag_force) / self.mass;
+        self.acceleration = (thrust_world + gravity_force + drag_force + external_force) / self.mass;
         self.velocity += self.acceleration * self.time_step;
         self.position += self.velocity * self.time_step;
         let inertia_angular_velocity = self.inertia_matrix * self.angular_velocity;
         let gyroscopic_torque = self.angular_velocity.cross(&inertia_angular_velocity);
-        //
-        let angular_acceleration = self.inertia_matrix_inv * (control_torque - gyroscopic_torque);
+        let angular_acceleration = self.inertia_matrix_inv * (control_torque - gyroscopic_torque - external_torque);
         self.angular_velocity += angular_acceleration * self.time_step;
         self.orientation *=
             UnitQuaternion::from_scaled_axis(self.angular_velocity * self.time_step);
@@ -2784,6 +2784,7 @@ impl Wind {
         friction_velocity: f32,
         zero_plane_displacement: f32,
         surface_roughness: f32,
+        seed: i32,
     ) -> Self {
         Self {
             wind_direction_noise: PerlinNoise2D::new(
@@ -2794,7 +2795,7 @@ impl Wind {
                 2.0,
                 (std::f64::consts::TAU, std::f64::consts::TAU),
                 101f64,
-                1i32,
+                seed,
             ),
             wind_vector: Vector3::new(0.0, 0.0, 0.0),
             von_karman_constant: von_karman_constant,
@@ -2805,12 +2806,20 @@ impl Wind {
     }
 
     pub fn update_wind_acceleration(&mut self, position: Vector3<f32>, time: f32) {
-        (self.friction_velocity / self.von_karman_constant)
+        let wind_velocity = (self.friction_velocity / self.von_karman_constant)
             * ((position.z - self.zero_plane_displacement) / self.surface_roughness).ln();
 
-        let mut x = self
-            .wind_direction_noise
-            .get_noise((position.y / position.x).atan(), time as f64);
+        let x = self.wind_direction_noise.get_noise(
+            ((self.wind_vector.y / self.wind_vector.x) as f64).atan(),
+            time as f64,
+        );
+
+        let y = Vector3::new(
+            wind_velocity * x.cos() as f32,
+            wind_velocity * x.sin() as f32,
+            0.0f32,
+        );
+        self.wind_vector = y;
     }
 }
 

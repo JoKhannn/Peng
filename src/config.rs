@@ -164,3 +164,4 @@ impl Config {
         Ok(serde_yaml::from_str(&contents)?)
     }
 }
+
