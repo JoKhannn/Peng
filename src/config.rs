@@ -1,5 +1,4 @@
 //! Configuration module
-//!
 //! This module contains the configuration for the simulation, quadrotor, PID controller, IMU, maze, camera, mesh, and planner schedule.
 //! The configuration is loaded from a YAML file using the serde library.
 //! The configuration is then used to initialize the simulation, quadrotor, PID controller, IMU, maze, camera, mesh, and planner schedule.
@@ -22,10 +21,6 @@ pub struct Config {
     pub mesh: MeshConfig,
     /// Planner schedule configuration
     pub planner_schedule: Vec<PlannerStep>,
-    /// Rerun blueprint path
-    pub rerun_blueprint: String,
-    /// Maximum number of threads for rendering
-    pub max_render_threads: Option<usize>,
     /// Use rerun.io for recording
     pub use_rerun: bool,
     /// Render depth
@@ -133,13 +128,13 @@ pub struct CameraConfig {
     /// Camera resolution in pixels (width, height)
     pub resolution: (usize, usize),
     /// Camera field of view in height in degrees
-    pub fov_vertical: f32,
+    pub fov: f32,
     /// Camera near clipping plane in meters
     pub near: f32,
     /// Camera far clipping plane in meters
     pub far: f32,
     /// Camera transform matrix for depth
-    pub rotation_transform: [f32; 9],
+    pub rotation_transform: [f32; 9]
 }
 
 #[derive(serde::Deserialize)]

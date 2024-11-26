@@ -1,39 +1,13 @@
-//! # Peng - A Minimal Quadrotor Autonomy Framework
-//!
-//! A high-performance quadrotor autonomy framework written in Rust that provides
-//! real-time dynamics simulation, trajectory planning, and control with modern
-//! visualization capabilities.
-//!
-//! # Features
-//!
-//! ## Real-time Simulation
-//! - High-fidelity quadrotor dynamics with configurable parameters
-//! - IMU and depth sensor simulation
-//! - Optional RK4 integration for accurate dynamics
-//!
-//! ## Advanced Control
-//! - PID control for position and attitude with tunable gains
-//! - Integral windup prevention
-//! - Support for different control frequencies
-//!
-//! ## Rich Trajectory Planning
-//! - Minimum jerk line trajectory planner
-//! - Lissajous curve planner
-//! - Circular trajectory planner
-//! - Obstacle avoidance planner
-//! - Waypoint navigation planner
-//! - Landing planner
-//!
-//! ## Visualization & Debug
-//! - Real-time 3D visualization via rerun.io
-//! - Depth map rendering
-//! - State telemetry logging
-//! - Configurable logging frequencies
-//!
-//! ## Performance
-//! - Memory-safe and Efficient Rust implementation
-//! - Multi-threaded depth rendering
-//!
+//! # Quadrotor Simulation
+//! This crate provides a comprehensive simulation environment for quadrotor drones.
+//! It includes models for quadrotor dynamics, IMU simulation, various trajectory planners,
+//! and a PID controller for position and attitude control.
+//! ## Features
+//! - Realistic quadrotor dynamics simulation
+//! - IMU sensor simulation with configurable noise parameters
+//! - Multiple trajectory planners including hover, minimum jerk, Lissajous curves, and circular paths
+//! - PID controller for position and attitude control
+//! - Integration with the `rerun` crate for visualization
 //! ## Example
 //! ```
 //! use nalgebra::Vector3;
@@ -87,8 +61,6 @@ pub struct Quadrotor {
     pub position: Vector3<f32>,
     /// Current velocity of the quadrotor
     pub velocity: Vector3<f32>,
-    /// Current acceleration of the quadrotor
-    pub acceleration: Vector3<f32>,
     /// Current orientation of the quadrotor
     pub orientation: UnitQuaternion<f32>,
     /// Current angular velocity of the quadrotor
@@ -145,7 +117,6 @@ impl Quadrotor {
         Ok(Self {
             position: Vector3::zeros(),
             velocity: Vector3::zeros(),
-            acceleration: Vector3::zeros(),
             orientation: UnitQuaternion::identity(),
             angular_velocity: Vector3::zeros(),
             mass,
@@ -180,8 +151,8 @@ impl Quadrotor {
         let gravity_force = Vector3::new(0.0, 0.0, -self.mass * self.gravity);
         let drag_force = -self.drag_coefficient * self.velocity.norm() * self.velocity;
         let thrust_world = self.orientation * Vector3::new(0.0, 0.0, control_thrust);
-        self.acceleration = (thrust_world + gravity_force + drag_force) / self.mass;
-        self.velocity += self.acceleration * self.time_step;
+        let acceleration = (thrust_world + gravity_force + drag_force) / self.mass;
+        self.velocity += acceleration * self.time_step;
         self.position += self.velocity * self.time_step;
         let inertia_angular_velocity = self.inertia_matrix * self.angular_velocity;
         let gyroscopic_torque = self.angular_velocity.cross(&inertia_angular_velocity);
@@ -300,7 +271,7 @@ impl Quadrotor {
     /// use nalgebra::UnitQuaternion;
     /// let (time_step, mass, gravity, drag_coefficient) = (0.01, 1.3, 9.81, 0.01);
     /// let inertia_matrix = [0.0347563, 0.0, 0.0, 0.0, 0.0458929, 0.0, 0.0, 0.0, 0.0977];
-    /// let mut quadrotor = Quadrotor::new(time_step, mass, gravity, drag_coefficient, inertia_matrix).unwrap();
+    /// let quadrotor = Quadrotor::new(time_step, mass, gravity, drag_coefficient, inertia_matrix).unwrap();
     /// let state = [
     ///   0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
     /// ];
@@ -309,7 +280,7 @@ impl Quadrotor {
     /// let derivative = quadrotor.state_derivative(&state, control_thrust, &control_torque);
     /// ```
     pub fn state_derivative(
-        &mut self,
+        &self,
         state: &[f32],
         control_thrust: f32,
         control_torque: &Vector3<f32>,
@@ -327,7 +298,7 @@ impl Quadrotor {
         let gravity_force = Vector3::new(0.0, 0.0, -self.mass * self.gravity);
         let drag_force = -self.drag_coefficient * velocity.norm() * velocity;
         let thrust_world = orientation * Vector3::new(0.0, 0.0, control_thrust);
-        self.acceleration = (thrust_world + gravity_force + drag_force) / self.mass;
+        let acceleration = (thrust_world + gravity_force + drag_force) / self.mass;
 
         let inertia_angular_velocity = self.inertia_matrix * angular_velocity;
         let gyroscopic_torque = angular_velocity.cross(&inertia_angular_velocity);
@@ -335,7 +306,7 @@ impl Quadrotor {
 
         let mut derivative = [0.0; 13];
         derivative[0..3].copy_from_slice(velocity.as_slice());
-        derivative[3..6].copy_from_slice(self.acceleration.as_slice());
+        derivative[3..6].copy_from_slice(acceleration.as_slice());
         derivative[6..10].copy_from_slice(q_dot.coords.as_slice());
         derivative[10..13].copy_from_slice(angular_acceleration.as_slice());
         derivative
@@ -356,7 +327,10 @@ impl Quadrotor {
     /// let (true_acceleration, true_angular_velocity) = quadrotor.read_imu().unwrap();
     /// ```
     pub fn read_imu(&self) -> Result<(Vector3<f32>, Vector3<f32>), SimulationError> {
-        Ok((self.acceleration, self.angular_velocity))
+        let gravity_world = Vector3::new(0.0, 0.0, self.gravity);
+        let true_acceleration =
+            self.orientation.inverse() * (self.velocity / self.time_step - gravity_world);
+        Ok((true_acceleration, self.angular_velocity))
     }
 }
 /// Represents an Inertial Measurement Unit (IMU) with bias and noise characteristics
@@ -451,8 +425,6 @@ impl Imu {
         Ok(())
     }
     /// Simulates IMU readings with added bias and noise
-    ///
-    /// The added bias and noise are based on normal distributions
     /// # Arguments
     /// * `true_acceleration` - The true acceleration vector
     /// * `true_angular_velocity` - The true angular velocity vector
@@ -485,9 +457,6 @@ impl Imu {
     }
 }
 /// PID controller for quadrotor position and attitude control
-///
-/// The kpid_pos and kpid_att gains are following the format of
-/// porportional, derivative and integral gains
 /// # Example
 /// ```
 /// use nalgebra::Vector3;
@@ -665,10 +634,9 @@ impl PIDController {
             + self.kpid_pos[2].component_mul(&self.integral_pos_error);
         let gravity_compensation = Vector3::new(0.0, 0.0, self.gravity);
         let total_acceleration = acceleration + gravity_compensation;
-        let total_acc_norm = total_acceleration.norm();
-        let thrust = self.mass * total_acc_norm;
-        let desired_orientation = if total_acc_norm > 1e-6 {
-            let z_body = total_acceleration / total_acc_norm;
+        let thrust = self.mass * total_acceleration.norm();
+        let desired_orientation = if total_acceleration.norm() > 1e-6 {
+            let z_body = total_acceleration.normalize();
             let yaw_rotation = UnitQuaternion::from_euler_angles(0.0, 0.0, desired_yaw);
             let x_body_horizontal = yaw_rotation * Vector3::new(1.0, 0.0, 0.0);
             let y_body = z_body.cross(&x_body_horizontal).normalize();
@@ -947,10 +915,7 @@ impl Planner for MinimumJerkLinePlanner {
         time: f32,
     ) -> (Vector3<f32>, Vector3<f32>, f32) {
         let t = ((time - self.start_time) / self.duration).clamp(0.0, 1.0);
-        let t2 = t * t;
-        let t3 = t2 * t;
-        let t4 = t3 * t;
-        let s = 10.0 * t2 - 15.0 * t3 + 6.0 * t4;
+        let s = 10.0 * t.powi(3) - 15.0 * t.powi(4) + 6.0 * t.powi(5);
         let s_dot = (30.0 * t.powi(2) - 60.0 * t.powi(3) + 30.0 * t.powi(4)) / self.duration;
         let position = self.start_position + (self.end_position - self.start_position) * s;
         let velocity = (self.end_position - self.start_position) * s_dot;
@@ -1309,7 +1274,6 @@ impl PlannerManager {
     }
 }
 /// Obstacle avoidance planner that uses a potential field approach to avoid obstacles
-///
 /// The planner calculates a repulsive force for each obstacle and an attractive force towards the goal
 /// The resulting force is then used to calculate the desired position and velocity
 /// # Example
@@ -2011,8 +1975,6 @@ impl Obstacle {
 /// # Example
 /// ```
 /// use peng_quad::{Maze, Obstacle};
-/// use rand_chacha::ChaCha8Rng;
-/// use rand::SeedableRng;
 /// use nalgebra::Vector3;
 /// let maze = Maze {
 ///     lower_bounds: [0.0, 0.0, 0.0],
@@ -2020,7 +1982,6 @@ impl Obstacle {
 ///     obstacles: vec![Obstacle::new(Vector3::new(0.0, 0.0, 0.0), Vector3::new(0.0, 0.0, 0.0), 1.0)],
 ///     obstacles_velocity_bounds: [0.0, 0.0, 0.0],
 ///     obstacles_radius_bounds: [0.0, 0.0],
-///     rng: ChaCha8Rng::from_entropy(),
 /// };
 /// ```
 pub struct Maze {
@@ -2034,8 +1995,6 @@ pub struct Maze {
     pub obstacles_velocity_bounds: [f32; 3],
     /// The bounds of the obstacles' radius
     pub obstacles_radius_bounds: [f32; 2],
-    /// Rng for generating random numbers
-    pub rng: ChaCha8Rng,
 }
 /// Implementation of the maze
 impl Maze {
@@ -2064,7 +2023,6 @@ impl Maze {
             obstacles: Vec::new(),
             obstacles_velocity_bounds,
             obstacles_radius_bounds,
-            rng: ChaCha8Rng::from_entropy(),
         };
         maze.generate_obstacles(num_obstacles);
         maze
@@ -2079,21 +2037,22 @@ impl Maze {
     /// maze.generate_obstacles(5);
     /// ```
     pub fn generate_obstacles(&mut self, num_obstacles: usize) {
+        let mut rng = ChaCha8Rng::from_entropy();
         self.obstacles = (0..num_obstacles)
             .map(|_| {
                 let position = Vector3::new(
-                    rand::Rng::gen_range(&mut self.rng, self.lower_bounds[0]..self.upper_bounds[0]),
-                    rand::Rng::gen_range(&mut self.rng, self.lower_bounds[1]..self.upper_bounds[1]),
-                    rand::Rng::gen_range(&mut self.rng, self.lower_bounds[2]..self.upper_bounds[2]),
+                    rand::Rng::gen_range(&mut rng, self.lower_bounds[0]..self.upper_bounds[0]),
+                    rand::Rng::gen_range(&mut rng, self.lower_bounds[1]..self.upper_bounds[1]),
+                    rand::Rng::gen_range(&mut rng, self.lower_bounds[2]..self.upper_bounds[2]),
                 );
                 let v_bounds = self.obstacles_velocity_bounds;
                 let r_bounds = self.obstacles_radius_bounds;
                 let velocity = Vector3::new(
-                    rand::Rng::gen_range(&mut self.rng, -v_bounds[0]..v_bounds[0]),
-                    rand::Rng::gen_range(&mut self.rng, -v_bounds[1]..v_bounds[1]),
-                    rand::Rng::gen_range(&mut self.rng, -v_bounds[2]..v_bounds[2]),
+                    rand::Rng::gen_range(&mut rng, -v_bounds[0]..v_bounds[0]),
+                    rand::Rng::gen_range(&mut rng, -v_bounds[1]..v_bounds[1]),
+                    rand::Rng::gen_range(&mut rng, -v_bounds[2]..v_bounds[2]),
                 );
-                let radius = rand::Rng::gen_range(&mut self.rng, r_bounds[0]..r_bounds[1]);
+                let radius = rand::Rng::gen_range(&mut rng, r_bounds[0]..r_bounds[1]);
                 Obstacle::new(position, velocity, radius)
             })
             .collect();
@@ -2129,14 +2088,8 @@ impl Maze {
 pub struct Camera {
     /// The resolution of the camera
     pub resolution: (usize, usize),
-    /// The vertical field of view of the camera
-    pub fov_vertical: f32,
-    /// The horizontal field of view of the camera
-    pub fov_horizontal: f32,
-    /// The vertical focal length of the camera
-    pub vertical_focal_length: f32,
-    /// The horizontal focal length of the camera
-    pub horizontal_focal_length: f32,
+    /// The field of view of the camera
+    pub fov: f32,
     /// The near clipping plane of the camera
     pub near: f32,
     /// The far clipping plane of the camera
@@ -2145,15 +2098,13 @@ pub struct Camera {
     pub aspect_ratio: f32,
     /// The ray directions of each pixel in the camera
     pub ray_directions: Vec<Vector3<f32>>,
-    /// Depth buffer
-    pub depth_buffer: Vec<f32>,
 }
 /// Implementation of the camera
 impl Camera {
     /// Creates a new camera with the given resolution, field of view, near and far clipping planes
     /// # Arguments
     /// * `resolution` - The resolution of the camera
-    /// * `fov_vertical` - The vertical field of view of the camera
+    /// * `fov` - The field of view of the camera
     /// * `near` - The near clipping plane of the camera
     /// * `far` - The far clipping plane of the camera
     /// # Returns
@@ -2161,12 +2112,11 @@ impl Camera {
     /// # Example
     /// ```
     /// use peng_quad::Camera;
-    /// let camera = Camera::new((800, 600), 1.0, 5.0, 120.0);
+    /// let camera = Camera::new((800, 600), 60.0, 0.1, 100.0);
     /// ```
-    pub fn new(resolution: (usize, usize), fov_vertical: f32, near: f32, far: f32) -> Self {
+    pub fn new(resolution: (usize, usize), fov: f32, near: f32, far: f32) -> Self {
         let (width, height) = resolution;
-        let (aspect_ratio, tan_half_fov) =
-            (width as f32 / height as f32, (fov_vertical / 2.0).tan());
+        let (aspect_ratio, tan_half_fov) = (width as f32 / height as f32, (fov / 2.0).tan());
         let mut ray_directions = Vec::with_capacity(width * height);
         for y in 0..height {
             for x in 0..width {
@@ -2175,55 +2125,41 @@ impl Camera {
                 ray_directions.push(Vector3::new(1.0, x_ndc, y_ndc).normalize());
             }
         }
-        let fov_horizontal =
-            (width as f32 / height as f32 * (fov_vertical / 2.0).tan()).atan() * 2.0;
-        let horizontal_focal_length = (width as f32 / 2.0) / ((fov_horizontal / 2.0).tan());
-        let vertical_focal_length = (height as f32 / 2.0) / ((fov_vertical / 2.0).tan());
-        let depth_buffer = vec![0.0; width * height];
-
         Self {
             resolution,
-            fov_vertical,
-            fov_horizontal,
-            vertical_focal_length,
-            horizontal_focal_length,
+            fov,
             near,
             far,
             aspect_ratio,
             ray_directions,
-            depth_buffer,
         }
     }
-
     /// Renders the depth of the scene from the perspective of the quadrotor
-    ///
-    /// When the depth value is out of the near and far clipping planes, it is set to infinity
-    /// When the resolution is larger than 32x24, multi-threading can accelerate the rendering
     /// # Arguments
     /// * `quad_position` - The position of the quadrotor
     /// * `quad_orientation` - The orientation of the quadrotor
     /// * `maze` - The maze in the scene
-    /// * `use_multi_threading` - Whether to use multi-threading to render the depth
+    /// * `depth_buffer` - The depth buffer to store the depth values
     /// # Errors
     /// * If the depth buffer is not large enough to store the depth values
     /// # Example
     /// ```
     /// use peng_quad::{Camera, Maze};
     /// use nalgebra::{Vector3, UnitQuaternion};
-    /// let mut camera = Camera::new((800, 600), 60.0, 0.1, 100.0);
+    /// let camera = Camera::new((800, 600), 60.0, 0.1, 100.0);
     /// let quad_position = Vector3::new(0.0, 0.0, 0.0);
     /// let quad_orientation = UnitQuaternion::identity();
     /// let mut maze = Maze::new([-1.0, -1.0, -1.0], [1.0, 1.0, 1.0], 5, [0.1, 0.1, 0.1], [0.1, 0.5]);
-    /// let use_multi_threading = true;
-    /// camera.render_depth(&quad_position, &quad_orientation, &maze, use_multi_threading);
-    /// let use_multi_threading = false;
-    /// camera.render_depth(&quad_position, &quad_orientation, &maze, use_multi_threading);
+    /// let mut depth_buffer = vec![0.0; 800 * 600];
+    /// let use_multithreading = true;
+    /// camera.render_depth(&quad_position, &quad_orientation, &maze, &mut depth_buffer, use_multithreading);
     /// ```
     pub fn render_depth(
-        &mut self,
+        &self,
         quad_position: &Vector3<f32>,
         quad_orientation: &UnitQuaternion<f32>,
         maze: &Maze,
+        depth_buffer: &mut Vec<f32>,
         use_multi_threading: bool,
     ) -> Result<(), SimulationError> {
         let (width, height) = self.resolution;
@@ -2231,125 +2167,101 @@ impl Camera {
         let rotation_camera_to_world = quad_orientation.to_rotation_matrix().matrix()
             * Matrix3::new(1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0);
         let rotation_world_to_camera = rotation_camera_to_world.transpose();
-
-        const CHUNK_SIZE: usize = 64;
         if use_multi_threading {
-            self.depth_buffer
-                .par_chunks_mut(CHUNK_SIZE)
+            depth_buffer.reserve((total_pixels - depth_buffer.capacity()).max(0));
+            depth_buffer
+                .par_iter_mut()
                 .enumerate()
-                .try_for_each(|(chunk_idx, chunk)| {
-                    let start_idx = chunk_idx * CHUNK_SIZE;
-                    for (i, depth) in chunk.iter_mut().enumerate() {
-                        let ray_idx = start_idx + i;
-                        if ray_idx >= total_pixels {
-                            break;
-                        }
-                        *depth = ray_cast(
-                            quad_position,
-                            &rotation_world_to_camera,
-                            &(rotation_camera_to_world * self.ray_directions[ray_idx]),
-                            maze,
-                            self.near,
-                            self.far,
-                        )?;
-                    }
+                .try_for_each(|(i, depth)| {
+                    let direction = rotation_camera_to_world * self.ray_directions[i];
+                    *depth =
+                        self.ray_cast(quad_position, &rotation_world_to_camera, &direction, maze)?;
                     Ok::<(), SimulationError>(())
                 })?;
         } else {
+            depth_buffer.clear();
+            depth_buffer.reserve((total_pixels - depth_buffer.capacity()).max(0));
             for i in 0..total_pixels {
-                self.depth_buffer[i] = ray_cast(
+                depth_buffer.push(self.ray_cast(
                     quad_position,
                     &rotation_world_to_camera,
                     &(rotation_camera_to_world * self.ray_directions[i]),
                     maze,
-                    self.near,
-                    self.far,
-                )?;
+                )?);
             }
         }
         Ok(())
     }
-}
-
-/// Casts a ray from the camera origin in the given direction
-/// # Arguments
-/// * `origin` - The origin of the ray
-/// * `rotation_world_to_camera` - The rotation matrix from world to camera coordinates
-/// * `direction` - The direction of the ray
-/// * `maze` - The maze in the scene
-/// * `near` - The minimum distance to consider
-/// * `far` - The maximum distance to consider
-/// # Returns
-/// * The distance to the closest obstacle hit by the ray
-/// # Errors
-/// * If the ray does not hit any obstacles
-/// # Example
-/// ```
-/// use peng_quad::{ray_cast, Maze};
-/// use nalgebra::{Vector3, Matrix3};
-/// let origin = Vector3::new(0.0, 0.0, 0.0);
-/// let rotation_world_to_camera = Matrix3::identity();
-/// let direction = Vector3::new(0.0, 0.0, 1.0);
-/// let maze = Maze::new([-1.0, -1.0, -1.0], [1.0, 1.0, 1.0], 5, [0.1, 0.1, 0.1], [0.1, 0.5]);
-/// let near = 0.1;
-/// let far = 100.0;
-/// let distance = ray_cast(&origin, &rotation_world_to_camera, &direction, &maze, near, far);
-/// ```
-pub fn ray_cast(
-    origin: &Vector3<f32>,
-    rotation_world_to_camera: &Matrix3<f32>,
-    direction: &Vector3<f32>,
-    maze: &Maze,
-    near: f32,
-    far: f32,
-) -> Result<f32, SimulationError> {
-    let mut closest_hit = far;
-    // Inline tube intersection
-    for axis in 0..3 {
-        let t_near = if direction[axis] > 0.0 {
-            (maze.upper_bounds[axis] - origin[axis]) / direction[axis]
-        } else {
-            (maze.lower_bounds[axis] - origin[axis]) / direction[axis]
-        };
-        if t_near > near && t_near < closest_hit {
-            let intersection_point = origin + direction * t_near;
-            let mut valid = true;
-            for i in 0..3 {
-                if i != axis
-                    && (intersection_point[i] < maze.lower_bounds[i]
-                        || intersection_point[i] > maze.upper_bounds[i])
-                {
-                    valid = false;
-                    break;
+    /// Casts a ray from the camera origin in the given direction
+    /// # Arguments
+    /// * `origin` - The origin of the ray
+    /// * `rotation_world_to_camera` - The rotation matrix from world to camera coordinates
+    /// * `direction` - The direction of the ray
+    /// * `maze` - The maze in the scene
+    /// # Returns
+    /// * The distance to the closest obstacle hit by the ray
+    /// # Errors
+    /// * If the ray does not hit any obstacles
+    /// # Example
+    /// ```
+    /// use peng_quad::{Camera, Maze};
+    /// use nalgebra::{Vector3, Matrix3};
+    /// let camera = Camera::new((800, 600), 60.0, 0.1, 100.0);
+    /// let origin = Vector3::new(0.0, 0.0, 0.0);
+    /// let rotation_world_to_camera = Matrix3::identity();
+    /// let direction = Vector3::new(1.0, 0.0, 0.0);
+    /// let mut maze = Maze::new([-1.0, -1.0, -1.0], [1.0, 1.0, 1.0], 5, [0.1, 0.1, 0.1], [0.1, 0.5]);
+    /// let distance = camera.ray_cast(&origin, &rotation_world_to_camera, &direction, &maze);
+    /// ```
+    pub fn ray_cast(
+        &self,
+        origin: &Vector3<f32>,
+        rotation_world_to_camera: &Matrix3<f32>,
+        direction: &Vector3<f32>,
+        maze: &Maze,
+    ) -> Result<f32, SimulationError> {
+        let mut closest_hit = self.far;
+        // Inline tube intersection
+        for axis in 0..3 {
+            if direction[axis].abs() > f32::EPSILON {
+                for &bound in &[maze.lower_bounds[axis], maze.upper_bounds[axis]] {
+                    let t = (bound - origin[axis]) / direction[axis];
+                    if t > self.near && t < closest_hit {
+                        let intersection_point = origin + direction * t;
+                        if (0..3).all(|i| {
+                            i == axis
+                                || (intersection_point[i] >= maze.lower_bounds[i]
+                                    && intersection_point[i] <= maze.upper_bounds[i])
+                        }) {
+                            closest_hit = t;
+                        }
+                    }
                 }
             }
-            if valid {
-                closest_hit = t_near;
+        }
+        // Early exit if we've hit a wall closer than any possible obstacle
+        if closest_hit <= self.near {
+            return Ok(f32::INFINITY);
+        }
+        // Inline sphere intersection
+        for obstacle in &maze.obstacles {
+            let oc = origin - obstacle.position;
+            let b = oc.dot(direction);
+            let c = oc.dot(&oc) - obstacle.radius * obstacle.radius;
+            let discriminant = b * b - c;
+            if discriminant >= 0.0 {
+                // let t = -b - discriminant.sqrt();
+                let t = -b - fast_sqrt(discriminant);
+                if t > self.near && t < closest_hit {
+                    closest_hit = t;
+                }
             }
         }
-    }
-    // Early exit if we've hit a wall closer than any possible obstacle
-    if closest_hit <= near {
-        return Ok(f32::INFINITY);
-    }
-    // Inline sphere intersection
-    for obstacle in &maze.obstacles {
-        let oc = origin - obstacle.position;
-        let b = oc.dot(direction);
-        let c = oc.dot(&oc) - obstacle.radius * obstacle.radius;
-        let discriminant = b * b - c;
-        if discriminant >= 0.0 {
-            // let t = -b - discriminant.sqrt();
-            let t = -b - fast_sqrt(discriminant);
-            if t > near && t < closest_hit {
-                closest_hit = t;
-            }
+        if closest_hit < self.far {
+            Ok((rotation_world_to_camera * direction * closest_hit).x)
+        } else {
+            Ok(f32::INFINITY)
         }
-    }
-    if closest_hit < far {
-        Ok((rotation_world_to_camera * direction * closest_hit).x)
-    } else {
-        Ok(f32::INFINITY)
     }
 }
 /// Logs simulation data to the rerun recording stream
@@ -2573,7 +2485,7 @@ pub fn log_trajectory(
     )?;
     Ok(())
 }
-/// Log mesh data to the rerun recording stream
+/// log mesh data to the rerun recording stream
 /// # Arguments
 /// * `rec` - The rerun::RecordingStream instance
 /// * `division` - The number of divisions in the mesh
@@ -2620,77 +2532,51 @@ pub fn log_mesh(
     )?;
     Ok(())
 }
-/// Log depth image data to the rerun recording stream
-///
-/// When the depth value is `f32::INFINITY`, the pixel is considered invalid and logged as black
-/// When the resolution is larger than 32x24, multi-threading can accelerate the rendering
+/// log depth image data to the rerun recording stream
 /// # Arguments
 /// * `rec` - The rerun::RecordingStream instance
-/// * `cam` - The Camera instance
-/// * `use_multi_threading` - Whether to use multithreading to log the depth image
+/// * `depth_image` - The depth image data
+/// * `width` - The width of the depth image
+/// * `height` - The height of the depth image
+/// * `min_depth` - The minimum depth value
+/// * `max_depth` - The maximum depth value
 /// # Errors
 /// * If the data cannot be logged to the recording stream
 /// # Example
 /// ```no_run
-/// use peng_quad::{log_depth_image, Camera};
+/// use peng_quad::log_depth_image;
 /// let rec = rerun::RecordingStreamBuilder::new("log.rerun").connect().unwrap();
-/// let camera = Camera::new((640, 480), 0.1, 100.0, 60.0);
-/// let use_multi_threading = false;
-/// log_depth_image(&rec, &camera, use_multi_threading).unwrap();
-/// let use_multi_threading = true;
-/// log_depth_image(&rec, &camera, use_multi_threading).unwrap();
+/// let depth_image = vec![0.0; 640 * 480];
+/// log_depth_image(&rec, &depth_image, 640, 480, 0.0, 1.0).unwrap();
 /// ```
 pub fn log_depth_image(
     rec: &rerun::RecordingStream,
-    cam: &Camera,
-    use_multi_threading: bool,
+    depth_image: &[f32],
+    width: usize,
+    height: usize,
+    min_depth: f32,
+    max_depth: f32,
 ) -> Result<(), SimulationError> {
-    let (width, height) = (cam.resolution.0, cam.resolution.1);
-    let (min_depth, max_depth) = (cam.near, cam.far);
-    let depth_image = &cam.depth_buffer;
-    let mut image: rerun::external::ndarray::Array<u8, _> =
-        rerun::external::ndarray::Array::zeros((height, width, 3));
+    let mut image = rerun::external::ndarray::Array::zeros((height, width, 3));
     let depth_range = max_depth - min_depth;
-    let scale_factor = 255.0 / depth_range;
-    if use_multi_threading {
-        const CHUNK_SIZE: usize = 32;
-        image
-            .as_slice_mut()
-            .expect("Failed to get mutable slice of image")
-            .par_chunks_exact_mut(CHUNK_SIZE * 3)
-            .enumerate()
-            .for_each(|(chunk_index, chunk)| {
-                let start_index = chunk_index * 32;
-                for (i, pixel) in chunk.chunks_exact_mut(3).enumerate() {
-                    let idx = start_index + i;
-                    let depth = depth_image[idx];
-                    let color = if depth.is_finite() {
-                        let normalized_depth =
-                            ((depth - min_depth) * scale_factor).clamp(0.0, 255.0);
-                        color_map_fn(normalized_depth)
-                    } else {
-                        (0, 0, 0)
-                    };
-                    (pixel[0], pixel[1], pixel[2]) = color;
-                }
-            });
-    } else {
-        for (index, pixel) in image
-            .as_slice_mut()
-            .expect("Failed to get mutable slice of image")
-            .chunks_exact_mut(3)
-            .enumerate()
-        {
-            let depth = depth_image[index];
-            let color = if depth.is_finite() {
-                let normalized_depth = ((depth - min_depth) * scale_factor).clamp(0.0, 255.0);
-                color_map_fn(normalized_depth)
-            } else {
-                (0, 0, 0)
-            };
-            (pixel[0], pixel[1], pixel[2]) = color;
-        }
-    }
+    image
+        .axis_iter_mut(rerun::external::ndarray::Axis(0))
+        .enumerate()
+        .for_each(|(y, mut row)| {
+            for (x, mut pixel) in row
+                .axis_iter_mut(rerun::external::ndarray::Axis(0))
+                .enumerate()
+            {
+                let depth = depth_image[y * width + x];
+                let color = if depth.is_finite() {
+                    let normalized_depth = ((depth - min_depth) / depth_range).clamp(0.0, 1.0);
+                    color_map_fn(normalized_depth * 255.0)
+                } else {
+                    (0, 0, 0)
+                };
+                (pixel[0], pixel[1], pixel[2]) = color;
+            }
+        });
     let rerun_image = rerun::Image::from_color_model_and_tensor(rerun::ColorModel::RGB, image)
         .map_err(|e| SimulationError::OtherError(format!("Failed to create rerun image: {}", e)))?;
     rec.log("world/quad/cam/depth", &rerun_image)?;
@@ -2699,41 +2585,46 @@ pub fn log_depth_image(
 /// creates pinhole camera
 /// # Arguments
 /// * `rec` - The rerun::RecordingStream instance
-/// * `cam` - The camera object
+/// * `width` - The width component of the camera resolution
+/// * `height` - The height component of the camera resolution
+/// * `fov` - The fov of the camera
 /// * `cam_position` - The position vector of the camera (aligns with the quad)
 /// * `cam_orientation` - The orientation quaternion of quad
 /// * `cam_transform` - The transform matrix between quad and camera alignment
+/// * `depth_image` - The depth image data
 /// # Errors
 /// * If the data cannot be logged to the recording stream
 /// # Example
 /// ```no_run
-/// use peng_quad::{log_pinhole_depth, Camera};
+/// use peng_quad::pinhole_depth;
 /// use nalgebra::{Vector3, UnitQuaternion};
 /// let rec = rerun::RecordingStreamBuilder::new("log.rerun").connect().unwrap();
 /// let depth_image = vec![ 0.0f32 ; 640 * 480];
 /// let cam_position = Vector3::new(0.0,0.0,0.0);
 /// let cam_orientation = UnitQuaternion::identity();
 /// let cam_transform = [0.0, 0.0, 1.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0];
-/// let camera = Camera::new((800, 600), 60.0, 0.1, 100.0);
-/// log_pinhole_depth(&rec, &camera, cam_position, cam_orientation, cam_transform).unwrap();
-/// ```
+/// pinhole_depth(&rec, 128usize, 96usize, 90.0, cam_position, cam_orientation, cam_transform, &depth_image).unwrap();
 
-pub fn log_pinhole_depth(
+pub fn pinhole_depth(
     rec: &rerun::RecordingStream,
-    cam: &Camera,
+    width: usize,
+    height: usize,
+    fov: f32,
     cam_position: Vector3<f32>,
     cam_orientation: UnitQuaternion<f32>,
     cam_transform: [f32; 9],
+    depth_image: &[f32],
 ) -> Result<(), SimulationError> {
-    let depth_image = &cam.depth_buffer;
-    let (width, height) = cam.resolution;
+    let fov_x = (width as f32 / height as f32 * (fov / 2.0).tan()).atan() * 2.0;
+    let horizontal_focal_length = (width as f32 / 2.0) / ((fov_x/ 2.0).tan());
+    let vertical_focal_length = (height as f32 / 2.0) / ((fov / 2.0).tan());
     let pinhole_camera = rerun::Pinhole::from_focal_length_and_resolution(
-        (cam.horizontal_focal_length, cam.vertical_focal_length),
+        (horizontal_focal_length, vertical_focal_length),
         (width as f32, height as f32),
     )
-    .with_camera_xyz(rerun::components::ViewCoordinates::RDF)
-    .with_resolution((width as f32, height as f32))
-    .with_principal_point((width as f32 / 2.0, height as f32 / 2.0));
+        .with_camera_xyz(rerun::components::ViewCoordinates::RDF)
+        .with_resolution((width as f32, height as f32))
+        .with_principal_point((width as f32 / 2.0, height as f32 / 2.0));
     let rotated_camera_orientation = UnitQuaternion::from_rotation_matrix(
         &(cam_orientation.to_rotation_matrix()
             * Rotation3::from_matrix_unchecked(Matrix3::from_row_slice(&cam_transform))),
