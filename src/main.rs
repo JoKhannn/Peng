@@ -2,30 +2,22 @@ use nalgebra::Vector3;
 use peng_quad::*;
 /// Main function for the simulation
 fn main() -> Result<(), SimulationError> {
-    let mut config_str_quad = "config/quad.yaml";
-    let mut config_str_environment = "config/environment.yaml";
-
+    let mut config_str = "config/quad.yaml";
     let args: Vec<String> = std::env::args().collect();
     if args.len() != 2 {
         println!(
             "[\x1b[33mWARN\x1b[0m peng_quad] Usage: {} <config.yaml>.",
             args[0]
         );
-        println!("[\x1b[33mWARN\x1b[0m peng_quad] Loading default configurations:");
-        println!("- config/quad.yaml");
-        println!("- config/environment.yaml");
+        println!("[\x1b[33mWARN\x1b[0m peng_quad] Loading default configuration: config/quad.yaml");
     } else {
         println!(
             "[\x1b[32mINFO\x1b[0m peng_quad] Loading configuration: {}",
             args[1]
         );
-        config_str_quad = &args[1];
-        config_str_environment = &args[1];
+        config_str = &args[1];
     }
-    let config =
-        config::Config::from_yaml(config_str_quad).expect("Failed to load quad configuration.");
-    let config_environment = config::Config::from_yaml(config_str_environment)
-        .expect("Failed to load environment configuration.");
+    let config = config::Config::from_yaml(config_str).expect("Failed to load configuration.");
     println!(
         "[\x1b[32mINFO\x1b[0m peng_quad]Use rerun.io: {}",
         config.use_rerun
@@ -66,14 +58,14 @@ fn main() -> Result<(), SimulationError> {
         config.camera.near,
         config.camera.far,
     );
-    if(config.wind.wind_state){
+    if config.wind.wind_state {
         let mut wind = Wind::new(
-            config_environment.wind.friction_velocity,
-            config_environment.wind.von_karman_constant,
-                zero_plane_displacement: 1.0
-                direction_seed: 1
-                surface_roughness: 0.001
-        )
+            config.wind.friction_velocity,
+            config.wind.von_karman_constant,
+            config.wind.zero_plane_displacement,
+            config.wind.direction_seed,
+            config.wind.surface_roughness,
+        );
     }
     let mut planner_manager = PlannerManager::new(Vector3::zeros(), 0.0);
     let mut trajectory = Trajectory::new(Vector3::new(0.0, 0.0, 0.0));

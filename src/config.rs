@@ -36,6 +36,8 @@ pub struct Config {
     pub use_rk4_for_dynamics_control: bool,
     /// Use RK4 for updating quadrotor dynamics without controls
     pub use_rk4_for_dynamics_update: bool,
+    /// Setup wind according to physical constants
+    pub wind: WindConfig,
 }
 
 #[derive(serde::Deserialize)]
@@ -88,7 +90,6 @@ pub struct PIDControllerConfig {
     pub att_max_int: [f32; 3],
 }
 
-#[derive(serde::Deserialize)]
 /// Configuration for PID gains
 pub struct PIDGains {
     /// Proportional gains
@@ -164,4 +165,3 @@ impl Config {
         Ok(serde_yaml::from_str(&contents)?)
     }
 }
-

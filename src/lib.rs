@@ -177,18 +177,16 @@ impl Quadrotor {
         &mut self,
         control_thrust: f32,
         control_torque: &Vector3<f32>,
-        external_force: Vector3<f32>,
-        external_torque: Vector3<f32>,
     ) {
         let gravity_force = Vector3::new(0.0, 0.0, -self.mass * self.gravity);
         let drag_force = -self.drag_coefficient * self.velocity.norm() * self.velocity;
         let thrust_world = self.orientation * Vector3::new(0.0, 0.0, control_thrust);
-        self.acceleration = (thrust_world + gravity_force + drag_force + external_force) / self.mass;
+        self.acceleration = (thrust_world + gravity_force + drag_force) / self.mass;
         self.velocity += self.acceleration * self.time_step;
         self.position += self.velocity * self.time_step;
         let inertia_angular_velocity = self.inertia_matrix * self.angular_velocity;
         let gyroscopic_torque = self.angular_velocity.cross(&inertia_angular_velocity);
-        let angular_acceleration = self.inertia_matrix_inv * (control_torque - gyroscopic_torque - external_torque);
+        let angular_acceleration = self.inertia_matrix_inv * (control_torque - gyroscopic_torque);
         self.angular_velocity += angular_acceleration * self.time_step;
         self.orientation *=
             UnitQuaternion::from_scaled_axis(self.angular_velocity * self.time_step);
