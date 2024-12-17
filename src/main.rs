@@ -58,6 +58,13 @@ fn main() -> Result<(), SimulationError> {
         config.camera.near,
         config.camera.far,
     );
+    let mut wind = Wind::new(
+            config.wind.friction_velocity,
+            config.wind.von_karman_constant,
+            config.wind.zero_plane_displacement,
+            config.wind.surface_roughness,
+            config.wind.direction_seed,
+    );
     if let Some(thread_count) = config.max_render_threads {
         rayon::ThreadPoolBuilder::new()
             .num_threads(thread_count)
@@ -134,18 +141,22 @@ fn main() -> Result<(), SimulationError> {
             &quad.angular_velocity,
             quad.time_step,
         );
+        
         if i % (config.simulation.simulation_frequency / config.simulation.control_frequency) == 0 {
             if config.use_rk4_for_dynamics_control {
                 quad.update_dynamics_with_controls_rk4(thrust, &torque);
             } else {
-                quad.update_dynamics_with_controls_euler(thrust, &torque);
+                quad.update_dynamics_with_controls_euler(thrust, &torque, &wind.wind_vector);
             }
             previous_thrust = thrust;
             previous_torque = torque;
         } else if config.use_rk4_for_dynamics_update {
             quad.update_dynamics_with_controls_rk4(previous_thrust, &previous_torque);
         } else {
-            quad.update_dynamics_with_controls_euler(previous_thrust, &previous_torque);
+            quad.update_dynamics_with_controls_euler(previous_thrust, &previous_torque, &wind.wind_vector);
+        }
+        if config.wind.wind_state {
+            wind.update_wind_velocity(quad.position, time);
         }
         imu.update(quad.time_step)?;
         let (true_accel, true_gyro) = quad.read_imu()?;

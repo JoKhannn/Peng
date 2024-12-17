@@ -36,6 +36,7 @@ pub struct Config {
     pub use_rk4_for_dynamics_control: bool,
     /// Use RK4 for updating quadrotor dynamics without controls
     pub use_rk4_for_dynamics_update: bool,
+    pub wind: WindConfig,
 }
 
 #[derive(serde::Deserialize)]
@@ -47,6 +48,16 @@ pub struct PlannerStep {
     pub planner_type: String,
     /// Parameters for the planner
     pub params: serde_yaml::Value,
+}
+
+#[derive(serde::Deserialize)]
+pub struct WindConfig {
+    pub wind_state: bool,
+    pub friction_velocity: f32,
+    pub von_karman_constant: f32,
+    pub zero_plane_displacement: f32,
+    pub direction_seed: f32,
+    pub surface_roughness: f32,
 }
 
 #[derive(serde::Deserialize)]

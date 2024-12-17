@@ -176,6 +176,7 @@ impl Quadrotor {
         &mut self,
         control_thrust: f32,
         control_torque: &Vector3<f32>,
+        wind_velocity: &Vector3<f32>,
     ) {
         let gravity_force = Vector3::new(0.0, 0.0, -self.mass * self.gravity);
         let drag_force = -self.drag_coefficient * self.velocity.norm() * self.velocity;
@@ -2759,6 +2760,63 @@ pub fn log_pinhole_depth(
     )?;
 
     Ok(())
+}
+pub struct Wind {
+    pub wind_direction_noise: PerlinNoise2D,
+    pub wind_vector: Vector3<f32>,
+    pub von_karman_constant: f32,
+    pub friction_velocity: f32,
+    pub zero_plane_displacement: f32,
+    pub surface_roughness: f32,
+}
+//perlin2d
+use perlin2d::*;
+
+///use log wind to determine wind strength coefficient based on height
+///need variable wind updates crosswind, strongwind, rapid angle update
+impl Wind {
+    pub fn new(
+        von_karman_constant: f32,
+        friction_velocity: f32,
+        zero_plane_displacement: f32,
+        surface_roughness: f32,
+        seed: f32,
+    ) -> Self {
+        Self {
+            wind_direction_noise: PerlinNoise2D::new(
+                6,
+                1.0,
+                0.5,
+                1.0,
+                2.0,
+                (std::f64::consts::TAU, std::f64::consts::TAU),
+                101f64,
+                seed as i32,
+            ),
+            wind_vector: Vector3::new(0.0, 0.0, 0.0),
+            von_karman_constant,
+            friction_velocity,
+            zero_plane_displacement,
+            surface_roughness,
+        }
+    }
+
+    pub fn update_wind_velocity(&mut self, position: Vector3<f32>, time: f32) {
+        let wind_velocity = (self.friction_velocity / self.von_karman_constant)
+            * ((position.z - self.zero_plane_displacement) / self.surface_roughness).ln();
+
+        let x = self.wind_direction_noise.get_noise(
+            ((self.wind_vector.y / self.wind_vector.x) as f64).atan(),
+            time as f64,
+        );
+
+        let y = Vector3::new(
+            wind_velocity * x.cos() as f32,
+            wind_velocity * x.sin() as f32,
+            0.0f32,
+        );
+        self.wind_vector = y;
+    }
 }
 /// turbo color map function
 /// # Arguments

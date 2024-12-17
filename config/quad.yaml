@@ -127,3 +127,11 @@ planner_schedule:
     planner_type: Landing
     params:
       duration: 5.0 # Duration of the landing maneuver (s)
+
+wind:
+  wind_state: true
+  friction_velocity: 0.344
+  von_karman_constant: 0.40
+  zero_plane_displacement: 1.0
+  direction_seed: 1
+  surface_roughness: 0.001
