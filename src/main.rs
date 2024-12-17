@@ -155,9 +155,7 @@ fn main() -> Result<(), SimulationError> {
         } else {
             quad.update_dynamics_with_controls_euler(previous_thrust, &previous_torque, &wind.wind_vector);
         }
-        if config.wind.wind_state {
-            wind.update_wind_velocity(quad.position, time);
-        }
+        wind.update_wind_velocity(quad.position, time);
         imu.update(quad.time_step)?;
         let (true_accel, true_gyro) = quad.read_imu()?;
         let (measured_accel, measured_gyro) = imu.read(true_accel, true_gyro)?;
