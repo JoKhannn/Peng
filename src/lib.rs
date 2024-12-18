@@ -48,7 +48,7 @@ pub mod config;
 use nalgebra::{Matrix3, Quaternion, Rotation3, SMatrix, UnitQuaternion, Vector3};
 use rand_chacha::ChaCha8Rng;
 use rand_distr::{Distribution, Normal};
-use std::f32::consts::PI;
+use std::f32::consts::{PI, TAU};
 #[derive(thiserror::Error, Debug)]
 /// Represents errors that can occur during simulation
 /// # Example
@@ -181,7 +181,8 @@ impl Quadrotor {
         let gravity_force = Vector3::new(0.0, 0.0, -self.mass * self.gravity);
         let drag_force = -self.drag_coefficient * self.velocity.norm() * self.velocity;
         let thrust_world = self.orientation * Vector3::new(0.0, 0.0, control_thrust);
-        self.acceleration = (thrust_world + gravity_force + drag_force + wind_velocity * self.time_step * self.mass) / self.mass;
+        let wind_force = wind_velocity / self.time_step * self.mass;
+        self.acceleration = (thrust_world + gravity_force + drag_force + wind_velocity + wind_force) / self.mass;
         self.velocity += self.acceleration * self.time_step;
         self.position += self.velocity * self.time_step;
         let inertia_angular_velocity = self.inertia_matrix * self.angular_velocity;
@@ -2383,6 +2384,7 @@ pub fn log_data(
     desired_velocity: &Vector3<f32>,
     measured_accel: &Vector3<f32>,
     measured_gyro: &Vector3<f32>,
+    wind_velocity: &Vector3<f32>,
 ) -> Result<(), SimulationError> {
     rec.log(
         "world/quad/desired_position",
@@ -2413,6 +2415,7 @@ pub fn log_data(
         ("gyro", measured_gyro),
         ("desired_position", desired_position),
         ("desired_velocity", desired_velocity),
+        ("wind_velocity", wind_velocity),
     ] {
         for (i, a) in ["x", "y", "z"].iter().enumerate() {
             rec.log(format!("{}/{}", pre, a), &rerun::Scalar::new(vec[i] as f64))?;
@@ -2793,7 +2796,7 @@ impl Wind {
                 101f64,
                 seed as i32,
             ),
-            wind_vector: Vector3::new(0.0, 0.0, 0.0),
+            wind_vector: Vector3::new(1.0, 1.0, 0.0),
             von_karman_constant,
             friction_velocity,
             zero_plane_displacement,
@@ -2802,20 +2805,15 @@ impl Wind {
     }
 
     pub fn update_wind_velocity(&mut self, position: Vector3<f32>, time: f32) {
-        //let wind_velocity = (self.friction_velocity / self.von_karman_constant)
-         //   * ((position.z - self.zero_plane_displacement) / self.surface_roughness).ln();
-
-     // let x = self.wind_direction_noise.get_noise(
-     //     ((self.wind_vector.y / self.wind_vector.x) as f64).atan(),
-     //     time as f64,
-     // );
-
-     // self.wind_vector = Vector3::new(
-     //     self.wind_vector.x * x.cos() as f32,
-     //     self.wind_vector.y * x.sin() as f32,
-     //     0.0f32,
-     // ) * 0.0;
-     self.wind_vector = Vector3::new(self.wind_vector.x - 0.0001, self.wind_vector.y - 0.0001, 0.0);
+        if position.z > 0.0 {
+            self.wind_vector = (0.344 / 0.4)
+           * position.z.ln() * self.wind_vector * 1.0;
+        }
+        
+        if self.wind_vector.x > 0.01 {
+            let x = self.wind_direction_noise.get_noise((self.wind_vector.y as f64 / self.wind_vector.x as f64).atan(), time as f64);
+            self.wind_vector = Vector3::new(self.wind_vector.x * x.cos() as f32, self.wind_vector.y * x.cos() as f32, 0.0) * 0.01;
+        }
     }
 }
 /// turbo color map function

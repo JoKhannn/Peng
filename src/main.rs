@@ -180,6 +180,7 @@ fn main() -> Result<(), SimulationError> {
                     &desired_velocity,
                     &measured_accel,
                     &measured_gyro,
+                    &wind.wind_vector,
                 )?;
                 if config.render_depth {
                     log_depth_image(rec, &camera, config.use_multithreading_depth_rendering)?;
