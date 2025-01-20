@@ -3,7 +3,7 @@ exclude = ["assets/", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md", "SECURITY.md"]
 name = "peng_quad"
 version = "0.5.3"
 edition = "2021"
-rust-version = "1.79"
+rust-version = "1.80"
 authors = ["Yang Zhou <yangzhou.info@gmail.com>"]
 description = "Peng is a minimal quadrotor pipeline including quadrotor dynamics, IMU simulation, various trajectory planners, PID controller and depth map rendering."
 license = "MIT OR Apache-2.0"
@@ -31,11 +31,11 @@ perlin2d = "0.2.6"
 nalgebra = "0.33.2"
 rand = { version = "0.8.5", features = ["rand_chacha"] }
 rand_distr = "0.4.3"
-rerun = "0.20.3"
-thiserror = "2.0.4"
-serde = { version = "1.0.215", features = ["derive"] }
+rerun = "0.21.0"
+thiserror = "2.0.11"
+serde = { version = "1.0.217", features = ["derive"] }
 serde_yaml = "0.9.34"
-env_logger = "0.11.5"
+env_logger = "0.11.6"
 log = "0.4.22"
 rayon = "1.10.0"
 rand_chacha = "0.3.1"
