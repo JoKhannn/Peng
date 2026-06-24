@@ -12,7 +12,7 @@
 
 Peng is a minimal quadrotor autonomy framework written in Rust that provides real-time dynamics simulation, trajectory planning, and control with modern visualization capabilities.
 
-[![rerun demo](https://raw.githubusercontent.com/makeecat/Peng/main/assets/Peng_demo.gif)](https://rerun.io/viewer/version/0.21.0/?url=https%3A%2F%2Fyangrobotics.com%2Ffiles%2Fpeng_v0.5.3a_demo.rrd)
+[![rerun demo](https://raw.githubusercontent.com/JoKhannn/Peng/c3070f67cf26606d298637383518b94abbd5ff9c/Peng_demo.gif)]
 
 ## 🎯 Key Features
 
